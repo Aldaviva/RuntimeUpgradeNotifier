@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Version>1.0.0-beta1</Version>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <RootNamespace>RuntimeUpgrade.Notifier</RootNamespace>
+        <Authors>Ben Hutchison</Authors>
+        <Copyright>© 2024 $(Authors)</Copyright>
+        <Company>$(Authors)</Company>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <RepositoryType>git</RepositoryType>
+        <PackageProjectUrl>https://github.com/Aldaviva/RuntimeUpgradeNotifier</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/Aldaviva/RuntimeUpgradeNotifier.git</RepositoryUrl>
+        <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+        <Description>Receive notifications when the .NET Runtime running your process gets upgraded to a new version, so you can restart your process and avoid crashing later.</Description>
+        <PackageTags>upgrade update installation install restart</PackageTags>
+        <PackageIcon>icon.png</PackageIcon>
+        <IncludeSource>true</IncludeSource>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <PackageReadmeFile>Readme.md</PackageReadmeFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+        <None Include="icon.png" Pack="true" PackagePath="\" />
+        <None Include="..\Readme.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+    <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true' or '$(Configuration)' == 'Release'">
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    </PropertyGroup>
+
+</Project>
