@@ -6,7 +6,7 @@
 public class RuntimeUpgradeEventArgs {
 
     /// <summary>
-    /// If <see cref="RuntimeUpgradeNotifier.RestartStrategy"/> is <see cref="RestartStrategy.AutoStartNewProcess"/> or <see cref="RestartStrategy.AutoRestartProcess"/>, this is the PID of the newly started process, otherwise, if it's <see cref="RestartStrategy.Manual"/> or <see cref="RestartStrategy.AutoRestartSystemdService"/>, this will be <c>null</c> because no new process will have been started by this program.
+    /// If <see cref="RuntimeUpgradeNotifier.RestartStrategy"/> is <see cref="RestartStrategy.AutoStartNewProcess"/> or <see cref="RestartStrategy.AutoRestartProcess"/>, this is the PID of the newly started process, otherwise, this will be <c>null</c> because no new process will have been started by this program.
     /// </summary>
     public int? NewProcessId { get; internal set; }
 

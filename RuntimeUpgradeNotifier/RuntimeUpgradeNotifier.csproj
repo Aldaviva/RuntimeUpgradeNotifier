@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net8.0;net8.0-windows</TargetFrameworks>
+        <TargetFrameworks>net8.0-windows;net8.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
-        <Version>1.0.0-beta2</Version>
+        <Version>1.0.0-beta7</Version>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
         <RootNamespace>RuntimeUpgrade.Notifier</RootNamespace>
@@ -26,14 +26,18 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <!-- Intransitive dependency: compile this library against types in Microsoft.Extensions.Hosting.Abstractions, but don't make consumers of this library also depend on Microsoft.Extensions.Hosting.Abstractions -->
-        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.4" PrivateAssets="All" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.4" />
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+        <None Include="icon.png;..\Readme.md" Pack="true" PackagePath="\" />
     </ItemGroup>
 
     <ItemGroup>
-        <None Include="icon.png;..\Readme.md" Pack="true" PackagePath="\" />
+        <!-- Intransitive dependency: compile this library against types in Microsoft.Extensions.Hosting.Abstractions, but don't make consumers of this library also depend on Microsoft.Extensions.Hosting.Abstractions -->
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.5" PrivateAssets="All" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.5" />
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    </ItemGroup>
+
+    <ItemGroup Condition="$(TargetFramework.EndsWith('-windows'))">
+        <PackageReference Include="System.Management" Version="9.0.5" />
     </ItemGroup>
 
     <PropertyGroup Condition="$(TargetFramework.EndsWith('-windows'))">
