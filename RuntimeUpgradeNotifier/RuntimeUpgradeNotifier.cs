@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using RuntimeUpgrade.Notifier.Data;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO.Pipes;
 using System.Security;
 
 namespace RuntimeUpgrade.Notifier;
@@ -62,9 +63,10 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
             }
 #endif
 
-            // eagerly load dynamic libraries that will be required later, because they will get deleted during an upgrade
+            // Eagerly load dynamic libraries that will be required later, because they will get deleted during an upgrade. This prevents "FileNotFoundException: Could not load file or assembly" errors.
             _ = new ProcessStartInfo();
             _ = Environment.CurrentDirectory;
+            new AnonymousPipeServerStream().Dispose(); // Process.Start needs System.IO.Pipes to be loaded
         } catch (SecurityException) { }
     }
 

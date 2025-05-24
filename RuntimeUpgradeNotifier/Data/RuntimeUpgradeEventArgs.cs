@@ -1,4 +1,4 @@
-﻿namespace RuntimeUpgrade.Notifier.Data;
+namespace RuntimeUpgrade.Notifier.Data;
 
 /// <summary>
 /// Data returned with the event that is fired when the .NET runtime is upgraded
