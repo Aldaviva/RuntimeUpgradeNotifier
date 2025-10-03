@@ -1,15 +1,14 @@
-#if WINDOWS
-using System.Management;
-#else
-using System.Runtime.InteropServices;
-#endif
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using RuntimeUpgrade.Notifier.Data;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO.Pipes;
+using System.Management;
+using System.Runtime.InteropServices;
 using System.Security;
+
+#pragma warning disable CA1416 // checked at runtime because the OS-agnostic build may be run on any OS including Windows, especially in dependents' tests
 
 namespace RuntimeUpgrade.Notifier;
 
@@ -17,19 +16,13 @@ namespace RuntimeUpgrade.Notifier;
 public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
 
     private const string IgnoreHangup = "RUNTIMEUPGRADENOTIFIER_NOHUP";
-    private const string WatchedRuntimeFilename =
-#if WINDOWS
-        "coreclr.dll";
-#else
-        "libcoreclr.so";
-#endif
 
-    private static readonly string   OldRuntimeVersion = Environment.Version.ToString(3);
-    private static readonly string?  ProcessPath       = Environment.ProcessPath;
-    private static readonly string[] CommandLineArgs   = Environment.GetCommandLineArgs();
-#if WINDOWS
-    private static readonly string PowershellPath = Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe");
-#endif
+    private static readonly string   OldRuntimeVersion      = Environment.Version.ToString(3);
+    private static readonly string?  ProcessPath            = Environment.ProcessPath;
+    private static readonly string[] CommandLineArgs        = Environment.GetCommandLineArgs();
+    private static readonly bool     Windows                = Environment.OSVersion.Platform == PlatformID.Win32NT;
+    private static readonly string   WatchedRuntimeFilename = Windows ? "coreclr.dll" : "libcoreclr.so";
+    private static readonly string   PowershellPath         = Windows ? Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe") : string.Empty;
 
     private event EventHandler<EventArgs>? BeforeRuntimeUpgradedInternal;
     private event EventHandler<RuntimeUpgradeEventArgs>? RuntimeUpgradedInternal;
@@ -52,16 +45,9 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
     /// <exception cref="ApplicationException">A Windows program is built without a Windows-specific TFM like <c>net8.0-windows</c></exception>
     static RuntimeUpgradeNotifier() {
         try {
-#if !WINDOWS
-            if (Environment.OSVersion.Platform == PlatformID.Win32NT) {
-                throw new ApplicationException(
-                    "RuntimeUpgradeNotifier requires Windows builds of programs to use a Windows-specific Target Framework Moniker, such as net8.0-windows instead of net8.0, to load dependencies correctly and avoid running Linux logic on Windows. You should add a 'net*-windows' TFM to <TargetFrameworks> in your .csproj, and build for this TFM with 'dotnet publish -f net*-windows'.");
-            }
-
-            if (Environment.GetEnvironmentVariable(IgnoreHangup)?.ToLowerInvariant() is "1" or "true") {
+            if (!Windows && Environment.GetEnvironmentVariable(IgnoreHangup)?.ToLowerInvariant() is "1" or "true") {
                 PosixSignalRegistration.Create(PosixSignal.SIGHUP, signal => { signal.Cancel = true; });
             }
-#endif
 
             // Eagerly load dynamic libraries that will be required later, because they will get deleted during an upgrade. This prevents "FileNotFoundException: Could not load file or assembly" errors.
             _ = new ProcessStartInfo();
@@ -97,16 +83,16 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
                     int selfPid = Environment.ProcessId;
 
                     try {
-#if WINDOWS
-                        using ManagementObjectSearcher   wmiSearch = new(new SelectQuery("Win32_Service", $"ProcessId = {selfPid}", ["Name"]));
-                        using ManagementObjectCollection wmiResults = wmiSearch.Get();
-                        using ManagementObject?          wmiResult = wmiResults.Cast<ManagementObject>().FirstOrDefault();
-                        _serviceName = (string?) wmiResult?["Name"];
-#else
-                        using Process ps = Process.Start(new ProcessStartInfo("/usr/bin/ps", ["-o", "unit=", selfPid.ToString()]) { RedirectStandardOutput = true })!;
-                        ps.WaitForExit();
-                        _serviceName = ps.ExitCode == 0 ? ps.StandardOutput.ReadToEnd().Trim() : null;
-#endif
+                        if (Windows) {
+                            using ManagementObjectSearcher   wmiSearch  = new(new SelectQuery("Win32_Service", $"ProcessId = {selfPid}", ["Name"]));
+                            using ManagementObjectCollection wmiResults = wmiSearch.Get();
+                            using ManagementObject?          wmiResult  = wmiResults.Cast<ManagementObject>().FirstOrDefault();
+                            _serviceName = (string?) wmiResult?["Name"];
+                        } else {
+                            using Process ps = Process.Start(new ProcessStartInfo("/usr/bin/ps", ["-o", "unit=", selfPid.ToString()]) { RedirectStandardOutput = true })!;
+                            ps.WaitForExit();
+                            _serviceName = ps.ExitCode == 0 ? ps.StandardOutput.ReadToEnd().Trim() : null;
+                        }
                     } catch (Win32Exception e) {
                         _logger.LogError(e, "Failed to get service name of current process");
                     } catch (SystemException e) {
@@ -230,12 +216,9 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
                 case RestartStrategy.AutoRestartService: {
                     _logger.LogTrace("Restarting service {serviceName}", _serviceName);
                     try {
-                        ProcessStartInfo startInfo =
-#if WINDOWS
-                            new(PowershellPath, ["-Command", "Restart-Service", "-Name", _serviceName!]);
-#else
-                            new("/usr/bin/systemctl", ["restart", _serviceName!]);
-#endif
+                        ProcessStartInfo startInfo = Windows
+                            ? new ProcessStartInfo(PowershellPath, ["-Command", "Restart-Service", "-Name", _serviceName!])
+                            : new ProcessStartInfo("/usr/bin/systemctl", ["restart", _serviceName!]);
 
                         using Process restartCommand = Process.Start(startInfo)!;
                         restartCommand.WaitForExit();
@@ -276,15 +259,14 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
 
     private int? StartNewProcessForCurrentProgram() {
         try {
-            using Process? newProcess = Process.Start(new ProcessStartInfo(ProcessPath!, CommandLineArgs.Skip(1)) {
+            ProcessStartInfo processStartInfo = new(ProcessPath!, CommandLineArgs.Skip(1)) {
                 WorkingDirectory = Environment.CurrentDirectory,
-                UseShellExecute  = false,
-#if !WINDOWS
-                Environment = {
-                    [IgnoreHangup] = true.ToString()
-                }
-#endif
-            });
+                UseShellExecute  = false
+            };
+            if (!Windows) {
+                processStartInfo.Environment[IgnoreHangup] = true.ToString();
+            }
+            using Process? newProcess = Process.Start(processStartInfo);
             if (newProcess != null) {
                 return newProcess.Id;
             } else {

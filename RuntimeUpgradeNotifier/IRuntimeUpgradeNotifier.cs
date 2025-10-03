@@ -24,9 +24,7 @@ public interface IRuntimeUpgradeNotifier: IDisposable {
     /// </summary>
     RestartStrategy RestartStrategy { get; set; }
 
-#if !WINDOWS
 #pragma warning disable CS1574
-#endif
     /// <summary>
     /// <para>Used to stop the current process when the .NET runtime is upgraded and <see cref="RestartStrategy"/> is <see cref="RestartStrategy.AutoRestartProcess"/> or <see cref="RestartStrategy.AutoStopProcess"/>. By default, it calls <see cref="Environment.Exit"/>.</para>
     /// <para>Provided implementations:
@@ -41,9 +39,7 @@ public interface IRuntimeUpgradeNotifier: IDisposable {
     /// <para>You can also define custom behavior to shut down your program by implementing the <see cref="ExitStrategy"/> interface.</para>
     /// </summary>
     ExitStrategy ExitStrategy { get; set; }
-#if !WINDOWS
 #pragma warning restore CS1574
-#endif
 
     /// <summary>
     /// <para>Event fired when the .NET Runtime that is running the current process is upgraded to a new version, and the old .NET version is uninstalled.</para>
