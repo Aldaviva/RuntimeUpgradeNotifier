@@ -1,0 +1,34 @@
+name: .NET
+
+on:
+  push:
+    branches: [ master ]
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    env:
+      ProjectName: RuntimeUpgradeNotifier
+
+    runs-on: windows-latest
+
+    steps:
+    - name: Clone
+      uses: actions/checkout@v4
+
+    - name: Restore
+      run: dotnet restore ${{ env.ProjectName }} --verbosity normal
+
+    - name: Build
+      run: dotnet build ${{ env.ProjectName }} --no-restore --configuration Release -p:GeneratePackageOnBuild=false
+
+    - name: Pack
+      run: dotnet pack ${{ env.ProjectName }} --no-build --configuration Release
+
+    - name: Upload package
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.ProjectName }}.nupkg
+        path: ${{ env.ProjectName }}/bin/Release/*.*nupkg
+        if-no-files-found: error

@@ -3,7 +3,7 @@
     <PropertyGroup>
         <TargetFrameworks>net8.0-windows;net8.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
-        <Version>1.0.0-beta9</Version>
+        <Version>1.0.0-beta10</Version>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
         <RootNamespace>RuntimeUpgrade.Notifier</RootNamespace>
@@ -23,6 +23,7 @@
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <PackageReadmeFile>Readme.md</PackageReadmeFile>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
 
     <ItemGroup>
@@ -31,10 +32,10 @@
 
     <ItemGroup>
         <!-- Intransitive dependency: compile this library against types in Microsoft.Extensions.Hosting.Abstractions, but don't make consumers of this library also depend on Microsoft.Extensions.Hosting.Abstractions -->
-        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.9" PrivateAssets="All" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.9" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.10" PrivateAssets="All" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.10" />
         <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
-        <PackageReference Include="System.Management" Version="9.0.9" />
+        <PackageReference Include="System.Management" Version="9.0.10" />
     </ItemGroup>
 
     <PropertyGroup Condition="$(TargetFramework.EndsWith('-windows'))">

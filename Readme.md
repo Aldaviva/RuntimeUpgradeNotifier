@@ -1,6 +1,8 @@
 📦 RuntimeUpgradeNotifier
 ===
 
+[![NuGet](https://img.shields.io/nuget/v/RuntimeUpgradeNotifier?logo=nuget&color=informational)](https://www.nuget.org/packages/RuntimeUpgradeNotifier)
+
 *Receive notifications when the .NET Runtime running your process gets upgraded to a new version, so you can restart your process and avoid crashing later.*
 
 <!-- MarkdownTOC autolink="true" bracket="round" autoanchor="false" levels="1,2,3,4" -->
@@ -47,16 +49,6 @@ using RuntimeUpgrade.Notifier;
 using IRuntimeUpgradeNotifier runtimeUpgradeNotifier = new RuntimeUpgradeNotifier();
 ```
 
-If your program targets Windows, make sure that you have a Windows-specific Target Framework Moniker for your project, so that the Windows-specific logic in RuntimeUpgradeNotifier is used. For example, a cross-platform `.csproj` project file could contain
-
-```xml
-<PropertyGroup>
-    <TargetFrameworks>net8.0-windows;net8.0</TargetFrameworks>
-</PropertyGroup>
-```
-
-At build time, make sure to compile the EXE using the Windows-specific TFM, such as `dotnet publish -f net8.0-windows -r win-x64`. Otherwise, Linux logic&mdash;such as using `systemctl` instead of Windows Services&mdash;will be used on Windows.
-
 ### Restart Strategy: what to do when the .NET runtime is upgraded
 
 #### Manual
@@ -68,7 +60,8 @@ runtimeUpgradeNotifier.RuntimeUpgraded += (_, evt) => {
 };
 ```
 
-Try not to call any code that would load any new .NET BCL libraries in the event handler, as these libraries would already have been deleted during the recent runtime upgrade, and may cause a `FileNotFoundException`. If you do need to do any work in the event handler, it is safest to preload assemblies by referring to types in the assembly when the program starts, and cache any values that you may need later. For example, if you want to log the old .NET runtime version when it gets upgraded, it is safest to cache [`Environment.Version`](https://learn.microsoft.com/en-us/dotnet/api/system.environment.version) in a variable when the program starts, instead of trying to read it after the old runtime has already been deleted.
+> [!WARNING]  
+> Try not to call any code that would load any new .NET BCL libraries in the event handler, as these libraries would already have been deleted during the recent runtime upgrade, and may cause a [`FileNotFoundException`](https://learn.microsoft.com/en-us/dotnet/api/system.io.filenotfoundexception). If you do need to do any work in the event handler, it is safest to preload assemblies by referring to types in the assembly when the program starts, and cache any values that you may need later. For example, if you want to log the old .NET runtime version when it gets upgraded, it is safest to cache [`Environment.Version`](https://learn.microsoft.com/en-us/dotnet/api/system.environment.version) in a variable when the program starts, instead of trying to read it after the old runtime has already been deleted.
 
 #### Automatically start a new process
 This starts a duplicate copy of the current process, with the same arguments, working directory, and environment variables. However, it does not exit the current process, so you will probably want to shut it down yourself by listening for the `IRuntimeUpgradeNotifier.RuntimeUpgraded` event, otherwise there will be two instances of the program running.
@@ -104,7 +97,8 @@ runtimeUpgradeNotifier.ExitStrategy = new EnvironmentExit(1); // if the watchdog
 #### Automatically restart service
 Tell the current background service/daemon to restart when the .NET runtime is upgraded. This works with both [systemd](https://www.nuget.org/packages/Microsoft.Extensions.Hosting.Systemd) and [Windows services](https://www.nuget.org/packages/Microsoft.Extensions.Hosting.WindowsServices/), and is equivalent to calling `systemctl restart $serviceName` or `Restart-Service $serviceName`.
 
-In practice, the official .NET installers on Windows (including through Windows Update) already automatically restart .NET processes without using this library, so this is only really needed on Linux. Cross-platform services can set this to `AutoRestartService` to avoid special cases, and Windows-only services don't need to use this library at all.
+> [!NOTE]  
+> In practice, the official .NET installers on Windows (including through Windows Update) already automatically restart .NET processes without using this library, so this is only really needed on Linux. Cross-platform services can set this to `AutoRestartService` to avoid special cases, and Windows-only services don't need to use this library at all.
 
 ```cs
 runtimeUpgradeNotifier.RestartStrategy = RestartStrategy.AutoRestartService;
@@ -176,4 +170,5 @@ public class KillExit: ExitStrategy {
 }
 ```
 
-Remember that if you only want to add some extra instructions before stopping the process and then use one of the predefined exit strategies, you can listen for the `IRuntimeUpgradeNotifier.RuntimeUpgraded` event instead of delegating to or subclassing an exit strategy.
+> [!TIP]
+> Remember that if you only want to add some extra instructions before stopping the process and then use one of the predefined exit strategies, you can listen for the `IRuntimeUpgradeNotifier.RuntimeUpgraded` event instead of delegating to or subclassing an exit strategy.
