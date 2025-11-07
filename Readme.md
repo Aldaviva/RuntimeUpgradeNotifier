@@ -1,7 +1,7 @@
 📦 RuntimeUpgradeNotifier
 ===
 
-[![NuGet](https://img.shields.io/nuget/v/RuntimeUpgradeNotifier?logo=nuget&color=informational)](https://www.nuget.org/packages/RuntimeUpgradeNotifier)
+[![NuGet](https://img.shields.io/nuget/v/RuntimeUpgradeNotifier?logo=nuget&color=informational)](https://www.nuget.org/packages/RuntimeUpgradeNotifier) [![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/Aldaviva/RuntimeUpgradeNotifier/dotnetpackage.yml?branch=master&logo=github)](https://github.com/Aldaviva/RuntimeUpgradeNotifier/actions/workflows/dotnetpackage.yml)
 
 *Receive notifications when the .NET Runtime running your process gets upgraded to a new version, so you can restart your process and avoid crashing later.*
 
@@ -11,7 +11,7 @@
 - [Installation](#installation)
 - [Usage](#usage)
     - [Get started](#get-started)
-    - [Restart Strategy: what to do when the .NET runtime is upgraded](#restart-strategy-what-to-do-when-the-net-runtime-is-upgraded)
+    - [Restart Strategy: what to do when the .NET Runtime is upgraded](#restart-strategy-what-to-do-when-the-net-runtime-is-upgraded)
         - [Manual](#manual)
         - [Automatically start a new process](#automatically-start-a-new-process)
         - [Automatically restart process](#automatically-restart-process)
@@ -49,19 +49,19 @@ using RuntimeUpgrade.Notifier;
 using IRuntimeUpgradeNotifier runtimeUpgradeNotifier = new RuntimeUpgradeNotifier();
 ```
 
-### Restart Strategy: what to do when the .NET runtime is upgraded
+### Restart Strategy: what to do when the .NET Runtime is upgraded
 
 #### Manual
 By default, this library will only notify you when the .NET Runtime is upgraded, instead of starting or stopping any processes. You can listen for events to determine when the .NET runtime was upgraded and take any actions you want.
 ```cs
 runtimeUpgradeNotifier.RestartStrategy = RestartStrategy.Manual; // default property value
 runtimeUpgradeNotifier.RuntimeUpgraded += (_, evt) => {
-    Console.WriteLine(".NET runtime was upgraded");
+    Console.WriteLine(".NET Runtime was upgraded");
 };
 ```
 
 > [!WARNING]  
-> Try not to call any code that would load any new .NET BCL libraries in the event handler, as these libraries would already have been deleted during the recent runtime upgrade, and may cause a [`FileNotFoundException`](https://learn.microsoft.com/en-us/dotnet/api/system.io.filenotfoundexception). If you do need to do any work in the event handler, it is safest to preload assemblies by referring to types in the assembly when the program starts, and cache any values that you may need later. For example, if you want to log the old .NET runtime version when it gets upgraded, it is safest to cache [`Environment.Version`](https://learn.microsoft.com/en-us/dotnet/api/system.environment.version) in a variable when the program starts, instead of trying to read it after the old runtime has already been deleted.
+> Try not to call any code that would load any new .NET BCL libraries in the event handler, as these libraries would already have been deleted during the recent runtime upgrade, and may cause a [`FileNotFoundException`](https://learn.microsoft.com/en-us/dotnet/api/system.io.filenotfoundexception). If you do need to do any work in the event handler, it is safest to preload assemblies by referring to types in the assembly when the program starts, and cache any values that you may need later. For example, if you want to log the old .NET Runtime version when it gets upgraded, it is safest to cache [`Environment.Version`](https://learn.microsoft.com/en-us/dotnet/api/system.environment.version) in a variable when the program starts, instead of trying to read it after the old runtime has already been deleted.
 
 #### Automatically start a new process
 This starts a duplicate copy of the current process, with the same arguments, working directory, and environment variables. However, it does not exit the current process, so you will probably want to shut it down yourself by listening for the `IRuntimeUpgradeNotifier.RuntimeUpgraded` event, otherwise there will be two instances of the program running.
@@ -85,7 +85,7 @@ runtimeUpgradeNotifier.RestartBehavior = RestartBehavior.AutoRestartProcess;
 ```
 
 #### Automatically stop process
-Stop the current process when the .NET runtime is upgraded, but does not automatically start any new processes. This is useful if a watchdog will automatically restart your process when it exits.
+Stop the current process when the .NET Runtime is upgraded, but does not automatically start any new processes. This is useful if a watchdog will automatically restart your process when it exits.
 
 To control how the process exits, including its exit code, see [Exit Strategy](#exit-strategy-how-to-stop-the-current-process).
 
@@ -95,7 +95,7 @@ runtimeUpgradeNotifier.ExitStrategy = new EnvironmentExit(1); // if the watchdog
 ```
 
 #### Automatically restart service
-Tell the current background service/daemon to restart when the .NET runtime is upgraded. This works with both [systemd](https://www.nuget.org/packages/Microsoft.Extensions.Hosting.Systemd) and [Windows services](https://www.nuget.org/packages/Microsoft.Extensions.Hosting.WindowsServices/), and is equivalent to calling `systemctl restart $serviceName` or `Restart-Service $serviceName`.
+Tell the current background service/daemon to restart when the .NET Runtime is upgraded. This works with both [systemd](https://www.nuget.org/packages/Microsoft.Extensions.Hosting.Systemd) and [Windows services](https://www.nuget.org/packages/Microsoft.Extensions.Hosting.WindowsServices/), and is equivalent to calling `systemctl restart $serviceName` or `Restart-Service $serviceName`.
 
 > [!NOTE]  
 > In practice, the official .NET installers on Windows (including through Windows Update) already automatically restart .NET processes without using this library, so this is only really needed on Linux. Cross-platform services can set this to `AutoRestartService` to avoid special cases, and Windows-only services don't need to use this library at all.
