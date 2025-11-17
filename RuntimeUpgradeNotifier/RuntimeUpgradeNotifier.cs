@@ -29,7 +29,6 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
 
     private readonly object _eventLock = new();
 
-    private RestartStrategy    _restartStrategy = RestartStrategy.Manual;
     private int                _subscriberCount;
     private FileSystemWatcher? _fileSystemWatcher;
     private string?            _watchedRuntimeDirectory;
@@ -53,23 +52,23 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
             _ = new ProcessStartInfo();
             _ = Environment.CurrentDirectory;
             new AnonymousPipeServerStream().Dispose(); // Process.Start needs System.IO.Pipes to be loaded
-        } catch (SecurityException) { }
+        } catch (SecurityException) {}
     }
 
     /// <inheritdoc />
     public RestartStrategy RestartStrategy {
-        get => _restartStrategy;
+        get;
         set {
-            if (_restartStrategy != value) {
+            if (field != value) {
                 lock (_eventLock) {
                     _subscriberCount += value switch {
-                        not RestartStrategy.Manual when _restartStrategy is RestartStrategy.Manual => 1,
-                        RestartStrategy.Manual when _restartStrategy is not RestartStrategy.Manual => -1,
-                        _                                                                          => 0
+                        not RestartStrategy.Manual when field is RestartStrategy.Manual => 1,
+                        RestartStrategy.Manual when field is not RestartStrategy.Manual => -1,
+                        _                                                               => 0
                     };
-                    _restartStrategy = value;
+                    field = value;
 
-                    _logger.LogTrace("Changed restart strategy to {strat}, new subscriber count is {subs}", _restartStrategy, _subscriberCount);
+                    _logger.LogTrace("Changed restart strategy to {strat}, new subscriber count is {subs}", field, _subscriberCount);
 
                     if (value != RestartStrategy.Manual && _subscriberCount == 1) {
                         StartListening();
@@ -104,12 +103,12 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
                     } else {
                         _logger.LogWarning("This process is not currently running as a service, falling back from {oldStrat} to {newStrat} if it needs to be restarted",
                             nameof(RestartStrategy.AutoRestartService), nameof(RestartStrategy.AutoRestartProcess));
-                        _restartStrategy = RestartStrategy.AutoRestartProcess;
+                        field = RestartStrategy.AutoRestartProcess;
                     }
                 }
             }
         }
-    }
+    } = RestartStrategy.Manual;
 
     /// <inheritdoc />
     public ExitStrategy ExitStrategy { get; set; } = new EnvironmentExit(null);
@@ -164,7 +163,7 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
                 _fileSystemWatcher         =  new FileSystemWatcher(_watchedRuntimeDirectory, WatchedRuntimeFilename) { EnableRaisingEvents = true, IncludeSubdirectories = false };
                 _fileSystemWatcher.Deleted += OnRuntimeFileDeletedAsync;
                 _logger.LogTrace("Watching for deletion of {path}", Path.Combine(_watchedRuntimeDirectory, WatchedRuntimeFilename));
-                _logger.LogInformation("Monitoring .NET {runtimeVer} Runtime for upgrades", OldRuntimeVersion);
+                _logger.LogDebug("Monitoring .NET {runtimeVer} Runtime for upgrades", OldRuntimeVersion);
             } else {
                 OnListeningError(null);
             }
