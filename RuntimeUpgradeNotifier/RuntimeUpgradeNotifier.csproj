@@ -34,7 +34,7 @@
         <!-- Intransitive dependency: compile this library against types in Microsoft.Extensions.Hosting.Abstractions, but don't make consumers of this library also depend on Microsoft.Extensions.Hosting.Abstractions -->
         <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" PrivateAssets="All" />
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.102" PrivateAssets="All" />
         <PackageReference Include="System.Management" Version="10.0.2" />
     </ItemGroup>
 
