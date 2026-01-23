@@ -45,7 +45,7 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
     static RuntimeUpgradeNotifier() {
         try {
             if (!Windows && Environment.GetEnvironmentVariable(IgnoreHangup)?.ToLowerInvariant() is "1" or "true") {
-                PosixSignalRegistration.Create(PosixSignal.SIGHUP, signal => { signal.Cancel = true; });
+                PosixSignalRegistration.Create(PosixSignal.SIGHUP, signal => signal.Cancel = true);
             }
 
             // Eagerly load dynamic libraries that will be required later, because they will get deleted during an upgrade. This prevents "FileNotFoundException: Could not load file or assembly" errors.
