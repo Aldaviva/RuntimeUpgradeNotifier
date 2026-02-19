@@ -29,11 +29,10 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
 
     private readonly object _eventLock = new();
 
-    private int                _subscriberCount;
-    private FileSystemWatcher? _fileSystemWatcher;
-    private string?            _watchedRuntimeDirectory;
-    private string?            _serviceName;
-
+    private int                             _subscriberCount;
+    private FileSystemWatcher?              _fileSystemWatcher;
+    private string?                         _watchedRuntimeDirectory;
+    private string?                         _serviceName;
     private ILogger<RuntimeUpgradeNotifier> _logger = NullLogger<RuntimeUpgradeNotifier>.Instance;
 
     /// <inheritdoc />
@@ -41,7 +40,6 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
         set => _logger = value.CreateLogger<RuntimeUpgradeNotifier>();
     }
 
-    /// <exception cref="ApplicationException">A Windows program is built without a Windows-specific TFM like <c>net8.0-windows</c></exception>
     static RuntimeUpgradeNotifier() {
         try {
             if (!Windows && Environment.GetEnvironmentVariable(IgnoreHangup)?.ToLowerInvariant() is "1" or "true") {
@@ -101,7 +99,7 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
                     if (_serviceName != null) {
                         _logger.LogTrace("This process is currently running as the service {name}", _serviceName);
                     } else {
-                        _logger.LogWarning("This process is not currently running as a service, falling back from {oldStrat} to {newStrat} if it needs to be restarted",
+                        _logger.LogDebug("This process is not currently running as a service, falling back from {oldStrat} to {newStrat} if it needs to be restarted",
                             nameof(RestartStrategy.AutoRestartService), nameof(RestartStrategy.AutoRestartProcess));
                         field = RestartStrategy.AutoRestartProcess;
                     }
@@ -162,8 +160,8 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
             if (_watchedRuntimeDirectory != string.Empty) {
                 _fileSystemWatcher         =  new FileSystemWatcher(_watchedRuntimeDirectory, WatchedRuntimeFilename) { EnableRaisingEvents = true, IncludeSubdirectories = false };
                 _fileSystemWatcher.Deleted += OnRuntimeFileDeletedAsync;
-                _logger.LogTrace("Watching for deletion of {path}", Path.Combine(_watchedRuntimeDirectory, WatchedRuntimeFilename));
-                _logger.LogDebug("Monitoring .NET {runtimeVer} Runtime for upgrades", OldRuntimeVersion);
+                _logger.LogDebug("Monitoring .NET {runtimeVer} Runtime for upgrades by watching for deletion of {path}", OldRuntimeVersion,
+                    Path.Combine(_watchedRuntimeDirectory, WatchedRuntimeFilename));
             } else {
                 OnListeningError(null);
             }
@@ -237,8 +235,6 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
                 default:
                     break;
             }
-        } else {
-            _logger.LogWarning("Ignoring event {changeType} on {name}", evt.ChangeType, evt.Name);
         }
     }
 

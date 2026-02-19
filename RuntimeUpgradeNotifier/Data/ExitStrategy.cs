@@ -63,7 +63,7 @@ public class HostedLifetimeExit(IHostApplicationLifetime applicationLifetime): E
 
     /// <summary>Exit a program running the .NET Generic Host, such as an ASP.NET Core webapp or a service/console app with the Microsoft IoC container.</summary>
     /// <param name="host">The Generic Host, such as a <c>WebApplication</c></param>
-    public HostedLifetimeExit(IHost host): this(host.Services.GetRequiredService<IHostApplicationLifetime>()) { }
+    public HostedLifetimeExit(IHost host): this(host.Services.GetRequiredService<IHostApplicationLifetime>()) {}
 
     /// <inheritdoc />
     public virtual void StopCurrentProcess() {
@@ -95,6 +95,25 @@ public class SemaphoreExit(SemaphoreSlim semaphore): ExitStrategy {
     /// <exception cref="SemaphoreFullException"></exception>
     public void StopCurrentProcess() {
         semaphore.Release();
+    }
+
+}
+
+/// <summary>
+/// Exit a program by completing the <see cref="Task"/> in <see cref="StopRequested"/>, which the program must have been waiting for before it exits.
+/// </summary>
+public class TaskExit: ExitStrategy {
+
+    private readonly TaskCompletionSource _tcs = new();
+
+    /// <summary>
+    /// Will be completed when the runtime is upgraded and this program is ready to exit. You can await this in <c>Main</c>, or use <see cref="Task.WhenAny(System.Threading.Tasks.Task[])"/> to allow your program to also exit in other ways.
+    /// </summary>
+    public Task StopRequested => _tcs.Task;
+
+    /// <inheritdoc />
+    public void StopCurrentProcess() {
+        _tcs.SetResult();
     }
 
 }

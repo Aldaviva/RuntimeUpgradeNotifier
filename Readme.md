@@ -11,16 +11,17 @@
 - [Installation](#installation)
 - [Usage](#usage)
     - [Get started](#get-started)
-    - [Restart Strategy: what to do when the .NET Runtime is upgraded](#restart-strategy-what-to-do-when-the-net-runtime-is-upgraded)
+    - [Restart Strategy: what to do when the runtime is upgraded](#restart-strategy-what-to-do-when-the-runtime-is-upgraded)
         - [Manual](#manual)
         - [Automatically start a new process](#automatically-start-a-new-process)
         - [Automatically restart process](#automatically-restart-process)
         - [Automatically stop process](#automatically-stop-process)
         - [Automatically restart service](#automatically-restart-service)
     - [Exit Strategy: how to stop the current process](#exit-strategy-how-to-stop-the-current-process)
-        - [Environment exit](#environment-exit)
+        - [Environment](#environment)
         - [App host](#app-host)
         - [Cancellation token](#cancellation-token)
+        - [Task](#task)
         - [Semaphore](#semaphore)
         - [Windows Forms](#windows-forms)
         - [Windows Presentation Foundation](#windows-presentation-foundation)
@@ -49,10 +50,10 @@ using RuntimeUpgrade.Notifier;
 using IRuntimeUpgradeNotifier runtimeUpgradeNotifier = new RuntimeUpgradeNotifier();
 ```
 
-### Restart Strategy: what to do when the .NET Runtime is upgraded
+### Restart Strategy: what to do when the runtime is upgraded
 
 #### Manual
-By default, this library will only notify you when the .NET Runtime is upgraded, instead of starting or stopping any processes. You can listen for events to determine when the .NET runtime was upgraded and take any actions you want.
+By default, this library will only notify you with events when the .NET Runtime is upgraded, instead of starting or stopping any processes. You can listen for events to determine when the runtime was upgraded and take any actions you want.
 ```cs
 runtimeUpgradeNotifier.RestartStrategy = RestartStrategy.Manual; // default property value
 runtimeUpgradeNotifier.RuntimeUpgraded += (_, evt) => {
@@ -97,19 +98,18 @@ runtimeUpgradeNotifier.ExitStrategy = new EnvironmentExit(1); // if the watchdog
 #### Automatically restart service
 Tell the current background service/daemon to restart when the .NET Runtime is upgraded. This works with both [systemd](https://www.nuget.org/packages/Microsoft.Extensions.Hosting.Systemd) and [Windows services](https://www.nuget.org/packages/Microsoft.Extensions.Hosting.WindowsServices/), and is equivalent to calling `systemctl restart $serviceName` or `Restart-Service $serviceName`.
 
-> [!NOTE]  
-> In practice, the official .NET installers on Windows (including through Windows Update) already automatically restart .NET processes without using this library, so this is only really needed on Linux. Cross-platform services can set this to `AutoRestartService` to avoid special cases, and Windows-only services don't need to use this library at all.
-
 ```cs
 runtimeUpgradeNotifier.RestartStrategy = RestartStrategy.AutoRestartService;
 ```
 
+If the process is not running as a service, this library will fall back to the [`AutoRestartProcess`](#automatically-restart-process) strategy, so you may want to set the desired [Exit Strategy](#exit-strategy-how-to-stop-the-current-process) to handle both cases.
+
 ### Exit Strategy: how to stop the current process
-This is only used when the [Restart Strategy](#restart-strategy-what-to-do-when-the-net-runtime-is-upgraded) is either `AutoRestartProcess` or `AutoStopProcess`. Otherwise, when it is `Manual`, `AutoStartNewProcess`, or `AutoRestartService`, this property has no effect.
+This is only used when the [Restart Strategy](#restart-strategy-what-to-do-when-the-runtime-is-upgraded) is either `AutoRestartProcess` or `AutoStopProcess`. Otherwise, when it is `Manual`, `AutoStartNewProcess`, or `AutoRestartService`, this property has no effect.
 
 By default, the current process will be exited by calling [`Environment.Exit(Environment.ExitCode)`](https://learn.microsoft.com/en-us/dotnet/api/system.environment.exit). You can customize this behavior to shut down your program any way you want. Here are some techniques provided in the library, and you can also [make your own custom approach by implementing the `ExitStrategy` interface](#custom-exit-strategy).
 
-#### Environment exit
+#### Environment
 This is the default strategy. It shuts down the current process by calling [`Environment.Exit`](https://learn.microsoft.com/en-us/dotnet/api/system.environment.exit).
 
 By default, the exit code is [`Environment.ExitCode`](https://learn.microsoft.com/en-us/dotnet/api/system.environment.exitcode). To specify a custom exit code, set the `Environment.ExitCode` property, or construct a new instance of `EnvironmentExit` with the exit code as a constructor argument.
@@ -132,6 +132,16 @@ If your program is blocking the `Main` method from returning using a [`Cancellat
 
 ```cs
 runtimeUpgradeNotifier.ExitStrategy = new CancellationTokenExit(cancellationTokenSource);
+```
+
+#### Task
+If your program is blocking the `Main` method from returning using a [`Task`](https://learn.microsoft.com/en-us/dotnet/api/system.threading.tasks.task), you can complete it to let the program exit.
+
+```cs
+TaskExit taskExit = new();
+runtimeUpgradeNotifier.ExitStrategy = taskExit;
+
+await taskExit.Exit;
 ```
 
 #### Semaphore

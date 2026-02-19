@@ -12,7 +12,7 @@ public enum RestartStrategy {
 
     /// <summary>
     /// <para>Starts a new instance of the current process, with the same arguments, working directory, and environment variables, before firing the <see cref="RuntimeUpgradeNotifier.RuntimeUpgraded"/> event with the new process' PID in <see cref="RuntimeUpgradeEventArgs.NewProcessId"/>.</para>
-    /// <para>You should exit the current instance of this process when you receive this event, because if you don't there will be two instances of your process running.</para>
+    /// <para>You should exit the current instance of this process when you receive this event, because if you don't there will be two instances of your process running. Does not use <see cref="RuntimeUpgradeNotifier.ExitStrategy"/>.</para>
     /// </summary>
     AutoStartNewProcess,
 
@@ -30,7 +30,8 @@ public enum RestartStrategy {
 
     /// <summary>
     /// <para>Gets the service name that the current process is running as, and tells systemd or Windows to restart it.</para>
-    /// <para>Useful with <c>Microsoft.Extensions.Hosting.Systemd</c> and <c>Mcrosoft.Extensions.Hosting.WindowsServices</c>.</para>
+    /// <para>Useful with <c>Microsoft.Extensions.Hosting.Systemd</c> and <c>Microsoft.Extensions.Hosting.WindowsServices</c>.</para>
+    /// <para>Does not use <see cref="IRuntimeUpgradeNotifier.ExitStrategy"/>.</para>
     /// </summary>
     AutoRestartService
 
