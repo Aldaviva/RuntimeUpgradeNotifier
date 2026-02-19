@@ -141,7 +141,7 @@ If your program is blocking the `Main` method from returning using a [`Task`](ht
 TaskExit taskExit = new();
 runtimeUpgradeNotifier.ExitStrategy = taskExit;
 
-await taskExit.Exit;
+await taskExit.StopRequested;
 ```
 
 #### Semaphore
