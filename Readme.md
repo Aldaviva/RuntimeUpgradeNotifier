@@ -41,9 +41,11 @@ dotnet package add RuntimeUpgradeNotifier
 
 ## Usage
 
-> [!CAUTION]
+> [!WARNING]
 > If you are running a Windows webapp service that depends on ASP.NET Core and uses Kestrel or `http.sys`, then you counterintuitively _**must**_ install the .NET [Hosting Bundle](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle) instead of separately installing the ASP.NET Core and .NET Runtimes, even though you're not hosting the webapp in IIS. This is required for your service to cleanly and automatically restart during .NET runtime update installations.
+> 
 > Otherwise, .NET updates (for example, installed by Windows Update) will attempt to start your service after updating the ASP.NET Core Runtime but before updating the .NET Runtime, which will cause an unrecoverable service crash because the two runtimes have different patch versions. By installing the Hosting Bundle, your service will start cleanly after both the ASP.NET Core and .NET Runtimes are updated together.
+> 
 > If your program runs either on Linux or Mac OS, in IIS, or without the Web/Razor/Blazor-WASM SDKs, then your program is not affected by this problem.
 
 ### Get started
@@ -103,17 +105,17 @@ runtimeUpgradeNotifier.ExitStrategy = new EnvironmentExit(1); // if the watchdog
 #### Automatically restart service
 Tell the current background service/daemon to restart when the .NET Runtime is upgraded. This works with both [systemd](https://www.nuget.org/packages/Microsoft.Extensions.Hosting.Systemd) and [Windows services](https://www.nuget.org/packages/Microsoft.Extensions.Hosting.WindowsServices/), and is equivalent to calling `systemctl restart $serviceName` or `Restart-Service $serviceName`.
 
-> [!NOTE]  
-> In practice, the official .NET installers on Windows (including through Windows Update) already automatically restart .NET processes without using this library, so this is only really needed on Linux. Cross-platform services can set this to `AutoRestartService` to avoid special cases, and Windows-only services don't need to use this library at all.
-
-> [!CAUTION]
-> When running Windows services that use ASP.NET Core on either Kestrel or `http.sys`, make sure to install the [.NET Hosting Bundle](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle) to [avoid crashed, stopped services after a .NET update](#usage).
-
 ```cs
 runtimeUpgradeNotifier.RestartStrategy = RestartStrategy.AutoRestartService;
 ```
 
 If the process is not running as a service, this library will fall back to the [`AutoRestartProcess`](#automatically-restart-process) strategy, so you may want to set the desired [Exit Strategy](#exit-strategy-how-to-stop-the-current-process) to handle both cases.
+
+> [!NOTE]  
+> In practice, the official .NET installers on Windows (including through Windows Update) already automatically restart .NET processes without using this library, so this is only really needed on Linux. Cross-platform services can set this to `AutoRestartService` to avoid special cases, and Windows-only services don't need to use this library at all.
+
+> [!WARNING]
+> When running Windows services that use ASP.NET Core on either Kestrel or `http.sys`, make sure to install the [.NET Hosting Bundle](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle) to [avoid crashed, stopped services after a .NET update](#usage).
 
 ### Exit Strategy: how to stop the current process
 This is only used when the [Restart Strategy](#restart-strategy-what-to-do-when-the-runtime-is-upgraded) is either `AutoRestartProcess` or `AutoStopProcess`. Otherwise, when it is `Manual`, `AutoStartNewProcess`, or `AutoRestartService`, this property has no effect.
