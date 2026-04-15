@@ -13,7 +13,7 @@ using System.Security;
 namespace RuntimeUpgrade.Notifier;
 
 /// <inheritdoc cref="IRuntimeUpgradeNotifier" />
-public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
+public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
 
     private const string IgnoreHangup = "RUNTIMEUPGRADENOTIFIER_NOHUP";
 
@@ -43,7 +43,7 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
     static RuntimeUpgradeNotifier() {
         try {
             if (!Windows && Environment.GetEnvironmentVariable(IgnoreHangup)?.ToLowerInvariant() is "1" or "true") {
-                PosixSignalRegistration.Create(PosixSignal.SIGHUP, signal => signal.Cancel = true);
+                PosixSignalRegistration.Create(PosixSignal.SIGHUP, static signal => signal.Cancel = true);
             }
 
             // Eagerly load dynamic libraries that will be required later, because they will get deleted during an upgrade. This prevents "FileNotFoundException: Could not load file or assembly" errors.
@@ -155,7 +155,7 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
         try {
             using Process currentProcess = Process.GetCurrentProcess();
             _watchedRuntimeDirectory ??= Path.GetDirectoryName(currentProcess.Modules.Cast<ProcessModule>()
-                .FirstOrDefault(module => module.ModuleName.Equals(WatchedRuntimeFilename, StringComparison.OrdinalIgnoreCase))?.FileName) ?? string.Empty;
+                .FirstOrDefault(static module => module.ModuleName.Equals(WatchedRuntimeFilename, StringComparison.OrdinalIgnoreCase))?.FileName) ?? string.Empty;
 
             if (_watchedRuntimeDirectory != string.Empty) {
                 _fileSystemWatcher         =  new FileSystemWatcher(_watchedRuntimeDirectory, WatchedRuntimeFilename) { EnableRaisingEvents = true, IncludeSubdirectories = false };
@@ -249,7 +249,6 @@ public class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
     /// <inheritdoc />
     public void Dispose() {
         StopListening();
-        GC.SuppressFinalize(this);
     }
 
     private int? StartNewProcessForCurrentProgram() {
