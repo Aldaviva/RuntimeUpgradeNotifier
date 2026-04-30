@@ -20,9 +20,9 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
     private static readonly string   OldRuntimeVersion      = Environment.Version.ToString(3);
     private static readonly string?  ProcessPath            = Environment.ProcessPath;
     private static readonly string[] CommandLineArgs        = Environment.GetCommandLineArgs();
-    private static readonly bool     Windows                = Environment.OSVersion.Platform == PlatformID.Win32NT;
-    private static readonly string   WatchedRuntimeFilename = Windows ? "coreclr.dll" : "libcoreclr.so";
-    private static readonly string   PowershellPath         = Windows ? Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe") : string.Empty;
+    private static readonly bool     IsWindows              = Environment.OSVersion.Platform == PlatformID.Win32NT;
+    private static readonly string   WatchedRuntimeFilename = IsWindows ? "coreclr.dll" : "libcoreclr.so";
+    private static readonly string   PowershellPath         = IsWindows ? Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe") : string.Empty;
 
     private event EventHandler<EventArgs>? BeforeRuntimeUpgradedInternal;
     private event EventHandler<RuntimeUpgradeEventArgs>? RuntimeUpgradedInternal;
@@ -42,7 +42,7 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
 
     static RuntimeUpgradeNotifier() {
         try {
-            if (!Windows && Environment.GetEnvironmentVariable(IgnoreHangup)?.ToLowerInvariant() is "1" or "true") {
+            if (!IsWindows && Environment.GetEnvironmentVariable(IgnoreHangup)?.ToLowerInvariant() is "1" or "true") {
                 PosixSignalRegistration.Create(PosixSignal.SIGHUP, static signal => signal.Cancel = true);
             }
 
@@ -80,7 +80,7 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
                     int selfPid = Environment.ProcessId;
 
                     try {
-                        if (Windows) {
+                        if (IsWindows) {
                             using ManagementObjectSearcher   wmiSearch  = new(new SelectQuery("Win32_Service", $"ProcessId = {selfPid}", ["Name"]));
                             using ManagementObjectCollection wmiResults = wmiSearch.Get();
                             using ManagementObject?          wmiResult  = wmiResults.Cast<ManagementObject>().FirstOrDefault();
@@ -159,7 +159,7 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
 
             if (_watchedRuntimeDirectory != string.Empty) {
                 _fileSystemWatcher         =  new FileSystemWatcher(_watchedRuntimeDirectory, WatchedRuntimeFilename) { EnableRaisingEvents = true, IncludeSubdirectories = false };
-                _fileSystemWatcher.Deleted += OnRuntimeFileDeletedAsync;
+                _fileSystemWatcher.Deleted += OnRuntimeFileDeleted;
                 _logger.LogDebug("Monitoring .NET {runtimeVer} Runtime for upgrades by watching for deletion of {path}", OldRuntimeVersion,
                     Path.Combine(_watchedRuntimeDirectory, WatchedRuntimeFilename));
             } else {
@@ -178,69 +178,90 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
         void OnListeningError(Exception? e) => _logger.LogError(e, "Failed to list modules loaded by current process or listen for changes to that file, not notifying for runtime upgrades.");
     }
 
-    private void OnRuntimeFileDeletedAsync(object sender, FileSystemEventArgs evt) {
-        if ((evt.ChangeType & WatcherChangeTypes.Deleted) != 0) {
-            _logger.LogInformation(".NET {oldVer} Runtime was upgraded, {action}", OldRuntimeVersion, RestartStrategy switch {
-                RestartStrategy.Manual              => "not doing anything besides firing events",
-                RestartStrategy.AutoStartNewProcess => "starting a new process for this program but not killing the old process",
-                RestartStrategy.AutoRestartProcess  => "starting a new process for this program and killing the old process",
-                RestartStrategy.AutoRestartService  => "requesting a service restart from the operating system",
-                RestartStrategy.AutoStopProcess     => "stopping this program but not starting a new process",
-                _                                   => "unsupported restart strategy"
-            });
-
-            BeforeRuntimeUpgradedInternal?.Invoke(this, EventArgs.Empty);
-
-            RuntimeUpgradeEventArgs eventArgs = new();
-
-            if (RestartStrategy is RestartStrategy.AutoRestartProcess or RestartStrategy.AutoStartNewProcess) {
-                _logger.LogTrace("Starting new process of this program");
-                eventArgs.NewProcessId = StartNewProcessForCurrentProgram();
-            }
-
-            RuntimeUpgradedInternal?.Invoke(this, eventArgs);
-
-            switch (RestartStrategy) {
-                case RestartStrategy.AutoRestartProcess:
-                case RestartStrategy.AutoStopProcess:
+    private async void OnRuntimeFileDeleted(object sender, FileSystemEventArgs evt) {
+        try {
+            if ((evt.ChangeType & WatcherChangeTypes.Deleted) != 0) {
+                if (IsWindows) {
                     try {
-                        _logger.LogTrace("Stopping old process");
-                        ExitStrategy.StopCurrentProcess();
-                    } catch (SecurityException e) {
-                        _logger.LogError(e, "Failed to exit current process");
+                        bool msiInstallationInProgress;
+                        do {
+                            if (msiInstallationInProgress = Mutex.TryOpenExisting(@"Global\_MSIExecute", out Mutex? msiMutex)) {
+                                msiMutex!.Dispose();
+                                _logger.LogInformation("Waiting for Windows Installer (msiexec) to finish its installation");
+                                await Task.Delay(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+                            }
+                        } while (msiInstallationInProgress);
+                    } catch (UnauthorizedAccessException e) {
+                        _logger.LogWarning(e, "Not allowed to find Windows Installer system mutex, assuming no msiexec installation is in progress now");
+                    } catch (Exception e) when (e is not OutOfMemoryException) {
+                        _logger.LogError(e, "Uncaught exception while waiting for Windows Installer to finish its installation before notifying program about .NET runtime upgrade");
                     }
-                    break;
-                case RestartStrategy.AutoRestartService: {
-                    _logger.LogTrace("Restarting service {serviceName}", _serviceName);
-                    try {
-                        ProcessStartInfo startInfo = Windows
-                            ? new ProcessStartInfo(PowershellPath, ["-Command", "Restart-Service", "-Name", _serviceName!])
-                            : new ProcessStartInfo("/usr/bin/systemctl", ["restart", _serviceName!]);
-
-                        using Process restartCommand = Process.Start(startInfo)!;
-                        restartCommand.WaitForExit();
-                        if (restartCommand.ExitCode is not 0 and var exitCode) {
-                            throw new ApplicationException($"Restarting service failed with exit code {exitCode}");
-                        }
-                    } catch (Exception e) {
-                        _logger.LogError(e, "Failed to restart service process, killing this process with exit code 1 to force it to be restarted");
-                        try {
-                            Environment.Exit(1);
-                        } catch (SecurityException e2) {
-                            _logger.LogError(e2, "Failed to exit current process after service restart also failed");
-                        }
-                    }
-                    break;
                 }
-                default:
-                    break;
+
+                _logger.LogInformation(".NET {oldVer} Runtime was upgraded, {action}", OldRuntimeVersion, RestartStrategy switch {
+                    RestartStrategy.Manual              => "not doing anything besides firing events",
+                    RestartStrategy.AutoStartNewProcess => "starting a new process for this program but not killing the old process",
+                    RestartStrategy.AutoRestartProcess  => "starting a new process for this program and killing the old process",
+                    RestartStrategy.AutoRestartService  => "requesting a service restart from the operating system",
+                    RestartStrategy.AutoStopProcess     => "stopping this program but not starting a new process",
+                    _                                   => "unsupported restart strategy"
+                });
+
+                BeforeRuntimeUpgradedInternal?.Invoke(this, EventArgs.Empty);
+
+                RuntimeUpgradeEventArgs eventArgs = new();
+
+                if (RestartStrategy is RestartStrategy.AutoRestartProcess or RestartStrategy.AutoStartNewProcess) {
+                    _logger.LogTrace("Starting new process of this program");
+                    eventArgs.NewProcessId = StartNewProcessForCurrentProgram();
+                }
+
+                RuntimeUpgradedInternal?.Invoke(this, eventArgs);
+
+                switch (RestartStrategy) {
+                    case RestartStrategy.AutoRestartProcess:
+                    case RestartStrategy.AutoStopProcess:
+                        try {
+                            _logger.LogTrace("Stopping old process");
+                            ExitStrategy.StopCurrentProcess();
+                        } catch (SecurityException e) {
+                            _logger.LogError(e, "Failed to exit current process");
+                        }
+                        break;
+                    case RestartStrategy.AutoRestartService: {
+                        _logger.LogTrace("Restarting service {serviceName}", _serviceName);
+                        try {
+                            ProcessStartInfo startInfo = IsWindows
+                                ? new ProcessStartInfo(PowershellPath, ["-Command", "Restart-Service", "-Name", _serviceName!])
+                                : new ProcessStartInfo("/usr/bin/systemctl", ["restart", _serviceName!]);
+
+                            using Process restartCommand = Process.Start(startInfo)!;
+                            await restartCommand.WaitForExitAsync().ConfigureAwait(false);
+                            if (restartCommand.ExitCode is not 0 and var exitCode) {
+                                throw new ApplicationException($"Restarting service failed with exit code {exitCode}");
+                            }
+                        } catch (Exception e) {
+                            _logger.LogError(e, "Failed to restart service process, killing this process with exit code 1 to force it to be restarted");
+                            try {
+                                Environment.Exit(1);
+                            } catch (SecurityException e2) {
+                                _logger.LogError(e2, "Failed to exit current process after service restart also failed");
+                            }
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
             }
+        } catch (Exception e) when (e is not OutOfMemoryException) {
+            _logger.LogError(e, $"Uncaught exception in {nameof(OnRuntimeFileDeleted)}");
         }
     }
 
     private void StopListening() {
         if (_fileSystemWatcher != null) {
-            _fileSystemWatcher.Deleted -= OnRuntimeFileDeletedAsync;
+            _fileSystemWatcher.Deleted -= OnRuntimeFileDeleted;
             _fileSystemWatcher.Dispose();
             _fileSystemWatcher = null;
         }
@@ -257,7 +278,7 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
                 WorkingDirectory = Environment.CurrentDirectory,
                 UseShellExecute  = false
             };
-            if (!Windows) {
+            if (!IsWindows) {
                 processStartInfo.Environment[IgnoreHangup] = true.ToString();
             }
             using Process? newProcess = Process.Start(processStartInfo);

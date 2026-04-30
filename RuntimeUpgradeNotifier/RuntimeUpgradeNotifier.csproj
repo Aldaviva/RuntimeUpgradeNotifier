@@ -3,7 +3,7 @@
     <PropertyGroup>
         <TargetFrameworks>net8.0-windows;net8.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
-        <Version>1.1.1</Version>
+        <Version>1.2.0</Version>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
         <RootNamespace>RuntimeUpgrade.Notifier</RootNamespace>
@@ -38,8 +38,8 @@
         <!-- Intransitive dependency: compile this library against types in Microsoft.Extensions.Hosting.Abstractions, but don't make consumers of this library also depend on Microsoft.Extensions.Hosting.Abstractions -->
         <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" PrivateAssets="All" />
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.202" PrivateAssets="All" />
-        <PackageReference Include="System.Management" Version="10.0.6" />
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.203" PrivateAssets="All" />
+        <PackageReference Include="System.Management" Version="10.0.7" />
     </ItemGroup>
 
     <PropertyGroup Condition="$(TargetFramework.EndsWith('-windows'))">
