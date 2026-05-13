@@ -44,9 +44,9 @@ dotnet package add RuntimeUpgradeNotifier
 > [!WARNING]
 > If you are running a Windows webapp service that depends on ASP.NET Core and uses Kestrel or `http.sys`, then you counterintuitively _**must**_ install the .NET [Hosting Bundle](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle) instead of separately installing the ASP.NET Core and .NET Runtimes, even though you're not hosting the webapp in IIS. This is required for your service to cleanly and automatically restart during .NET runtime update installations.
 > 
-> Otherwise, .NET updates (for example, installed by Windows Update) will attempt to start your service after updating the ASP.NET Core Runtime but before updating the .NET Runtime, which will cause an unrecoverable service crash because the two runtimes have different patch versions. By installing the Hosting Bundle, your service will start cleanly after both the ASP.NET Core and .NET Runtimes are updated together.
+> Otherwise, .NET updates (for example, installed by Windows Update) will attempt to start your service after updating the ASP.NET Core Runtime but before updating the .NET Runtime, which will cause an unrecoverable service crash because the two runtimes have different patch versions. By installing the Hosting Bundle, your service will start cleanly only after both the ASP.NET Core and .NET Runtimes are updated together.
 > 
-> If your program runs either on Linux or Mac OS, in IIS, or without the Web/Razor/Blazor-WASM SDKs, then your program is not affected by this problem.
+> If your program runs on Linux, in IIS, or without the Web/Razor/WASM SDKs, then your program is not affected by this problem.
 
 ### Get started
 Construct a new instance of `RuntimeUpgradeNotifier`.

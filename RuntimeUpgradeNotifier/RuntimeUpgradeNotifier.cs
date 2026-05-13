@@ -50,6 +50,7 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
             _ = new ProcessStartInfo();
             _ = Environment.CurrentDirectory;
             new AnonymousPipeServerStream().Dispose(); // Process.Start needs System.IO.Pipes to be loaded
+            Stopwatch.StartNew().Reset();
         } catch (SecurityException) {}
     }
 
@@ -110,6 +111,15 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
 
     /// <inheritdoc />
     public ExitStrategy ExitStrategy { get; set; } = new EnvironmentExit(null);
+
+    /// <inheritdoc />
+    public TimeSpan WindowsInstallerFinishedDebounceDuration {
+        get;
+        set {
+            if (value < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(value), value, "duration must be non-negative");
+            field = value;
+        }
+    } = TimeSpan.FromSeconds(15);
 
     /// <inheritdoc />
     public event EventHandler<RuntimeUpgradeEventArgs>? RuntimeUpgraded {
@@ -183,14 +193,19 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
             if ((evt.ChangeType & WatcherChangeTypes.Deleted) != 0) {
                 if (IsWindows) {
                     try {
-                        bool msiInstallationInProgress;
-                        do {
-                            if (msiInstallationInProgress = Mutex.TryOpenExisting(@"Global\_MSIExecute", out Mutex? msiMutex)) {
-                                msiMutex!.Dispose();
-                                _logger.LogInformation("Waiting for Windows Installer (msiexec) to finish its installation");
-                                await Task.Delay(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+                        Stopwatch sinceInstallationEnded = Stopwatch.StartNew();
+                        while (sinceInstallationEnded.Elapsed < WindowsInstallerFinishedDebounceDuration) {
+                            if (Mutex.TryOpenExisting(@"Global\_MSIExecute", out Mutex? msiMutex)) {
+                                msiMutex.Dispose();
+
+                                if (sinceInstallationEnded.IsRunning) { // starting installation
+                                    sinceInstallationEnded.Reset();
+                                }
+                            } else if (!sinceInstallationEnded.IsRunning) { // stopping installation
+                                sinceInstallationEnded.Restart();
                             }
-                        } while (msiInstallationInProgress);
+                            await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+                        }
                     } catch (UnauthorizedAccessException e) {
                         _logger.LogWarning(e, "Not allowed to find Windows Installer system mutex, assuming no msiexec installation is in progress now");
                     } catch (Exception e) when (e is not OutOfMemoryException) {
