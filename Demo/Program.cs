@@ -17,6 +17,7 @@ runtimeUpgradeNotifier.ExitStrategy = exitStrategy;
 runtimeUpgradeNotifier.RuntimeUpgraded += (_, evt) => {
     MessageBox.Show($"Runtime upgraded, restarted this program with PID {evt.NewProcessId ?? null} and exiting this process",
         "RuntimeUpgradeNotifier Demo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    return Task.CompletedTask;
 };
 
 await exitStrategy.StopRequested;

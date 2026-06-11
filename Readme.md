@@ -42,11 +42,11 @@ dotnet package add RuntimeUpgradeNotifier
 ## Usage
 
 > [!WARNING]
-> If you are running a Windows webapp service that depends on ASP.NET Core and uses Kestrel or `http.sys`, then you counterintuitively _**must**_ install the .NET [Hosting Bundle](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle) instead of separately installing the ASP.NET Core and .NET Runtimes, even though you're not hosting the webapp in IIS. This is required for your service to cleanly and automatically restart during .NET runtime update installations.
+> If you are running a Windows webapp service that depends on ASP.NET Core and uses Kestrel or `http.sys` (without IIS), then you counterintuitively _**must**_ install the .NET [Hosting Bundle](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle) instead of separately installing the ASP.NET Core and .NET Runtimes, even though you're not hosting the webapp in IIS. This is required for your service to cleanly and automatically restart during .NET runtime update installations.
 > 
-> Otherwise, .NET updates (for example, installed by Windows Update) will attempt to start your service after updating the ASP.NET Core Runtime but before updating the .NET Runtime, which will cause an unrecoverable service crash because the two runtimes have different patch versions. By installing the Hosting Bundle, your service will start cleanly only after both the ASP.NET Core and .NET Runtimes are updated together.
+> Otherwise, .NET updates (for example, installed by Windows Update) will attempt to start your service after updating the ASP.NET Core Runtime but before updating the .NET Runtime, which will cause an unrecoverable service crash because the two runtimes have different patch versions. Service recovery rules will not help. By installing the Hosting Bundle, your service will start cleanly, because it will wait until both the ASP.NET Core and .NET Runtimes are finished updating.
 > 
-> If your program runs on Linux, in IIS, or without the Web/Razor/WASM SDKs, then your program is not affected by this problem.
+> If your program runs either in IIS, or on Linux or Mac OS, or without the Web/Razor/WASM SDKs, then your program is not affected by this problem.
 
 ### Get started
 Construct a new instance of `RuntimeUpgradeNotifier`.
@@ -63,16 +63,16 @@ using IRuntimeUpgradeNotifier runtimeUpgradeNotifier = new RuntimeUpgradeNotifie
 By default, this library will only notify you with events when the .NET Runtime is upgraded, instead of starting or stopping any processes. You can listen for events to determine when the runtime was upgraded and take any actions you want.
 ```cs
 runtimeUpgradeNotifier.RestartStrategy = RestartStrategy.Manual; // default property value
-runtimeUpgradeNotifier.RuntimeUpgraded += (_, evt) => {
+runtimeUpgradeNotifier.RuntimeUpgraded += async (_, evt) => {
     Console.WriteLine(".NET Runtime was upgraded");
 };
 ```
 
 > [!WARNING]  
-> Try not to call any code that would load any new .NET BCL libraries in the event handler, as these libraries would already have been deleted during the recent runtime upgrade, and may cause a [`FileNotFoundException`](https://learn.microsoft.com/en-us/dotnet/api/system.io.filenotfoundexception). If you do need to do any work in the event handler, it is safest to preload assemblies by referring to types in the assembly when the program starts, and cache any values that you may need later. For example, if you want to log the old .NET Runtime version when it gets upgraded, it is safest to cache [`Environment.Version`](https://learn.microsoft.com/en-us/dotnet/api/system.environment.version) in a variable when the program starts, instead of trying to read it after the old runtime has already been deleted.
+> Try not to call any code that would load any new .NET BCL libraries in the event handler, as these libraries would already have been deleted during the recent runtime upgrade, and may cause a [`FileNotFoundException`](https://learn.microsoft.com/en-us/dotnet/api/system.io.filenotfoundexception). If you do need to do any work in the event handler, it is safest to preload assemblies by referring to types in the assembly when the program starts, and cache any values that you may need later. For example, if you want to log the old .NET Runtime version when it gets upgraded, it is safest to cache the value of [`Environment.Version`](https://learn.microsoft.com/en-us/dotnet/api/system.environment.version) in a variable when the program starts, instead of trying to read it after the old runtime has already been deleted.
 
 #### Automatically start a new process
-This starts a duplicate copy of the current process, with the same arguments, working directory, and environment variables. However, it does not exit the current process, so you will probably want to shut it down yourself by listening for the `IRuntimeUpgradeNotifier.RuntimeUpgraded` event, otherwise there will be two instances of the program running.
+This starts a duplicate copy of the current process, with the same arguments, working directory, and environment variables. However, it does not exit the current process, so you will probably want to shut it down yourself by listening for the `IRuntimeUpgradeNotifier.RuntimeUpgraded` event, otherwise there will be two instances of the program running. You can also subscribe to the `IRuntimeUpgradeNotifier.BeforeRuntimeUpgraded` event to receive a notification before the new process is started.
 
 ```cs
 runtimeUpgradeNotifier.RestartStrategy = RestartStrategy.AutoStartNewProcess;
@@ -86,7 +86,7 @@ When the .NET Runtime for your process is upgraded, this will start a new instan
 
 To control how the current process exits, including its exit code, see [Exit Strategy](#exit-strategy-how-to-stop-the-current-process).
 
-Both the old and new process will be running for a brief period, so if any resources or actions can't be concurrent, you will need an interprocess synchronization technique like a [`Semaphore`](https://learn.microsoft.com/en-us/dotnet/api/system.threading.semaphore).
+Both the old and new process will be running for a brief period, so if any resources or actions can't be concurrent, you will need an interprocess synchronization technique like a [`Semaphore`](https://learn.microsoft.com/en-us/dotnet/api/system.threading.semaphore). You can also subscribe to the `IRuntimeUpgradeNotifier.BeforeRuntimeUpgraded` event to receive a notification before the new process is started.
 
 ```cs
 runtimeUpgradeNotifier.RestartBehavior = RestartBehavior.AutoRestartProcess;
@@ -115,7 +115,7 @@ If the process is not running as a service, this library will fall back to the [
 > In practice, the official .NET installers on Windows (including through Windows Update) already automatically restart .NET processes without using this library, so this is only really needed on Linux. Cross-platform services can set this to `AutoRestartService` to avoid special cases, and Windows-only services don't need to use this library at all.
 
 > [!WARNING]
-> When running Windows services that use ASP.NET Core on either Kestrel or `http.sys`, make sure to install the [.NET Hosting Bundle](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle) to [avoid crashed, stopped services after a .NET update](#usage).
+> When running Windows services that use ASP.NET Core, make sure to install the [.NET Hosting Bundle](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle) to [avoid crashed, stopped services after a .NET update](#usage).
 
 ### Exit Strategy: how to stop the current process
 This is only used when the [Restart Strategy](#restart-strategy-what-to-do-when-the-runtime-is-upgraded) is either `AutoRestartProcess` or `AutoStopProcess`. Otherwise, when it is `Manual`, `AutoStartNewProcess`, or `AutoRestartService`, this property has no effect.
@@ -179,15 +179,23 @@ runtimeUpgradeNotifier.ExitStrategy = new WpfApplicationExit(1);
 ```
 
 #### Custom exit strategy
-You can also define your own technique to exit the process by implementing the `ExitStrategy` interface. Here is an example that uncleanly kills the current process.
+You can also define your own technique to exit the process by passing a function to `DelegateExit` or implementing the `ExitStrategy` interface. Here are examples that uncleanly kills the current process.
+
+```cs
+runtimeUpgradeNotifier.ExitStrategy = new DelegateExit(() => {
+    Process.GetCurrentProcess().Kill();
+    return Task.CompletedTask;
+});
+```
 
 ```cs
 runtimeUpgradeNotifier.ExitStrategy = new KillExit();
 
 public class KillExit: ExitStrategy {
 
-    public void StopCurrentProcess() {
+    public Task StopCurrentProcess() {
         Process.GetCurrentProcess().Kill();
+        return Task.CompletedTask;
     }
 
 }

@@ -24,10 +24,9 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
     private static readonly string   WatchedRuntimeFilename = IsWindows ? "coreclr.dll" : "libcoreclr.so";
     private static readonly string   PowershellPath         = IsWindows ? Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe") : string.Empty;
 
-    private event EventHandler<EventArgs>? BeforeRuntimeUpgradedInternal;
-    private event EventHandler<RuntimeUpgradeEventArgs>? RuntimeUpgradedInternal;
-
-    private readonly object _eventLock = new();
+    private readonly object                                                  _eventLock                      = new();
+    private readonly ICollection<AsyncEventHandler>                          _beforeRuntimeUpgradedCallbacks = [];
+    private readonly ICollection<AsyncEventHandler<RuntimeUpgradeEventArgs>> _runtimeUpgradedCallbacks       = [];
 
     private int                             _subscriberCount;
     private FileSystemWatcher?              _fileSystemWatcher;
@@ -51,7 +50,8 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
             _ = Environment.CurrentDirectory;
             new AnonymousPipeServerStream().Dispose(); // Process.Start needs System.IO.Pipes to be loaded
             Stopwatch.StartNew().Reset();
-        } catch (SecurityException) {}
+            Task.WhenAll();
+        } catch (SecurityException) {} catch (IOException) {}
     }
 
     /// <inheritdoc />
@@ -119,13 +119,13 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
             if (value < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(value), value, "duration must be non-negative");
             field = value;
         }
-    } = TimeSpan.FromSeconds(15);
+    } = TimeSpan.FromMinutes(2);
 
     /// <inheritdoc />
-    public event EventHandler<RuntimeUpgradeEventArgs>? RuntimeUpgraded {
+    public event AsyncEventHandler<RuntimeUpgradeEventArgs> RuntimeUpgraded {
         add {
             lock (_eventLock) {
-                RuntimeUpgradedInternal += value;
+                _runtimeUpgradedCallbacks.Add(value);
                 if (++_subscriberCount == 1) {
                     StartListening();
                 }
@@ -133,7 +133,7 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
         }
         remove {
             lock (_eventLock) {
-                RuntimeUpgradedInternal -= value;
+                _runtimeUpgradedCallbacks.Remove(value);
                 if (--_subscriberCount == 0) {
                     StopListening();
                 }
@@ -142,10 +142,10 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
     }
 
     /// <inheritdoc />
-    public event EventHandler<EventArgs>? BeforeRuntimeUpgraded {
+    public event AsyncEventHandler BeforeRuntimeUpgraded {
         add {
             lock (_eventLock) {
-                BeforeRuntimeUpgradedInternal += value;
+                _beforeRuntimeUpgradedCallbacks.Add(value);
                 if (++_subscriberCount == 1) {
                     StartListening();
                 }
@@ -153,7 +153,7 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
         }
         remove {
             lock (_eventLock) {
-                BeforeRuntimeUpgradedInternal -= value;
+                _beforeRuntimeUpgradedCallbacks.Remove(value);
                 if (--_subscriberCount == 0) {
                     StopListening();
                 }
@@ -208,7 +208,13 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
                         }
                     } catch (UnauthorizedAccessException e) {
                         _logger.LogWarning(e, "Not allowed to find Windows Installer system mutex, assuming no msiexec installation is in progress now");
+                    } catch (IOException e) {
+                        OnUncaughtException(e);
                     } catch (Exception e) when (e is not OutOfMemoryException) {
+                        OnUncaughtException(e);
+                    }
+
+                    void OnUncaughtException(Exception e) {
                         _logger.LogError(e, "Uncaught exception while waiting for Windows Installer to finish its installation before notifying program about .NET runtime upgrade");
                     }
                 }
@@ -222,23 +228,29 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
                     _                                   => "unsupported restart strategy"
                 });
 
-                BeforeRuntimeUpgradedInternal?.Invoke(this, EventArgs.Empty);
+                IEnumerable<AsyncEventHandler>                          beforeRuntimeUpdadedCallbacks;
+                IEnumerable<AsyncEventHandler<RuntimeUpgradeEventArgs>> runtimeUpdadedCallbacks;
+                lock (_eventLock) {
+                    beforeRuntimeUpdadedCallbacks = _beforeRuntimeUpgradedCallbacks.ToList();
+                    runtimeUpdadedCallbacks       = _runtimeUpgradedCallbacks.ToList();
+                }
+
+                await Task.WhenAll(beforeRuntimeUpdadedCallbacks.Select(handler => handler(this))).ConfigureAwait(false);
 
                 RuntimeUpgradeEventArgs eventArgs = new();
-
                 if (RestartStrategy is RestartStrategy.AutoRestartProcess or RestartStrategy.AutoStartNewProcess) {
                     _logger.LogTrace("Starting new process of this program");
                     eventArgs.NewProcessId = StartNewProcessForCurrentProgram();
                 }
 
-                RuntimeUpgradedInternal?.Invoke(this, eventArgs);
+                await Task.WhenAll(runtimeUpdadedCallbacks.Select(handler => handler(this, eventArgs))).ConfigureAwait(false);
 
                 switch (RestartStrategy) {
                     case RestartStrategy.AutoRestartProcess:
                     case RestartStrategy.AutoStopProcess:
                         try {
                             _logger.LogTrace("Stopping old process");
-                            ExitStrategy.StopCurrentProcess();
+                            await ExitStrategy.StopCurrentProcess().ConfigureAwait(false);
                         } catch (SecurityException e) {
                             _logger.LogError(e, "Failed to exit current process");
                         }

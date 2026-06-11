@@ -33,6 +33,8 @@ public interface IRuntimeUpgradeNotifier: IDisposable {
     /// <item><description><see cref="HostedLifetimeExit"/></description></item>
     /// <item><description><see cref="CancellationTokenExit"/></description></item>
     /// <item><description><see cref="SemaphoreExit"/></description></item>
+    /// <item><description><see cref="TaskExit"/></description></item>
+    /// <item><description><see cref="DelegateExit"/></description></item>
     /// <item><description><see cref="FormsApplicationExit"/> (Windows only)</description></item>
     /// <item><description><see cref="WpfApplicationExit"/> (Windows only)</description></item>
     /// </list></para>
@@ -44,7 +46,7 @@ public interface IRuntimeUpgradeNotifier: IDisposable {
     /// <summary>
     /// <para>Minimum duration that defines how long Windows Installer (MSI) installations must not be running continuously after a runtime upgrade before triggering a notification or restarting the program.</para>
     /// <para>This attempts to solve the problem where some .NET runtimes get upgraded non-atomically. For example, Visual Studio Installer removes the old runtime, waits, and then installs the new runtime, leaving a window of time in between when no suitable runtime is installed and restarting the dependent program would lead to a crash with a "You must install .NET" error.</para>
-    /// <para>The default duration is 15 seconds. Only used on Windows, and ignored on Linux.</para>
+    /// <para>The default duration is 2 minutes. Only used on Windows, and ignored on Linux.</para>
     /// </summary>
     /// <exception accessor="set" cref="ArgumentOutOfRangeException">duration is negative</exception>
     TimeSpan WindowsInstallerFinishedDebounceDuration { get; set; }
@@ -53,11 +55,11 @@ public interface IRuntimeUpgradeNotifier: IDisposable {
     /// <para>Event fired when the .NET Runtime that is running the current process is upgraded to a new version, and the old .NET version is uninstalled.</para>
     /// <para>Specifically, this event is fired after any new process is started, but before the current process is stopped. Note that starting and stopping processes can be configured by <see cref="RestartStrategy"/>, but this event will be fired even if the start or stop are skipped.</para>
     /// </summary>
-    event EventHandler<RuntimeUpgradeEventArgs>? RuntimeUpgraded;
+    event AsyncEventHandler<RuntimeUpgradeEventArgs> RuntimeUpgraded;
 
     /// <summary>
     /// Event fired before starting the new process after the .NET Runtime has been upgraded. Note that starting a new process can be configured by <see cref="RestartStrategy"/>, but this event will be fired even if the start is skipped.
     /// </summary>
-    event EventHandler<EventArgs>? BeforeRuntimeUpgraded;
+    event AsyncEventHandler BeforeRuntimeUpgraded;
 
 }

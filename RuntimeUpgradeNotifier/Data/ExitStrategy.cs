@@ -11,7 +11,7 @@ public interface ExitStrategy {
     /// <summary>
     /// Exit the currently running process.
     /// </summary>
-    void StopCurrentProcess();
+    Task StopCurrentProcess();
 
 }
 
@@ -22,8 +22,9 @@ public interface ExitStrategy {
 public class EnvironmentExit(int? exitCode): ExitStrategy {
 
     /// <inheritdoc />
-    public virtual void StopCurrentProcess() {
+    public virtual Task StopCurrentProcess() {
         Environment.Exit(exitCode ?? Environment.ExitCode);
+        return Task.CompletedTask;
     }
 
 }
@@ -35,8 +36,9 @@ public class EnvironmentExit(int? exitCode): ExitStrategy {
 public class FormsApplicationExit: ExitStrategy {
 
     /// <inheritdoc />
-    public virtual void StopCurrentProcess() {
+    public virtual Task StopCurrentProcess() {
         Application.Exit();
+        return Task.CompletedTask;
     }
 
 }
@@ -48,8 +50,9 @@ public class FormsApplicationExit: ExitStrategy {
 public class WpfApplicationExit(int? exitCode): ExitStrategy {
 
     /// <inheritdoc />
-    public virtual void StopCurrentProcess() {
+    public virtual Task StopCurrentProcess() {
         System.Windows.Application.Current.Shutdown(exitCode ?? Environment.ExitCode);
+        return Task.CompletedTask;
     }
 
 }
@@ -66,8 +69,9 @@ public class HostedLifetimeExit(IHostApplicationLifetime applicationLifetime): E
     public HostedLifetimeExit(IHost host): this(host.Services.GetRequiredService<IHostApplicationLifetime>()) {}
 
     /// <inheritdoc />
-    public virtual void StopCurrentProcess() {
+    public virtual Task StopCurrentProcess() {
         applicationLifetime.StopApplication();
+        return Task.CompletedTask;
     }
 
 }
@@ -79,8 +83,8 @@ public class HostedLifetimeExit(IHostApplicationLifetime applicationLifetime): E
 public class CancellationTokenExit(CancellationTokenSource cancellationTokenSource): ExitStrategy {
 
     /// <inheritdoc />
-    public void StopCurrentProcess() {
-        cancellationTokenSource.Cancel();
+    public virtual async Task StopCurrentProcess() {
+        await cancellationTokenSource.CancelAsync().ConfigureAwait(false);
     }
 
 }
@@ -93,8 +97,9 @@ public class SemaphoreExit(SemaphoreSlim semaphore): ExitStrategy {
 
     /// <inheritdoc />
     /// <exception cref="SemaphoreFullException"></exception>
-    public void StopCurrentProcess() {
+    public virtual Task StopCurrentProcess() {
         semaphore.Release();
+        return Task.CompletedTask;
     }
 
 }
@@ -112,8 +117,18 @@ public class TaskExit: ExitStrategy {
     public Task StopRequested => _tcs.Task;
 
     /// <inheritdoc />
-    public void StopCurrentProcess() {
-        _tcs.SetResult();
+    public virtual Task StopCurrentProcess() {
+        _tcs.TrySetResult();
+        return Task.CompletedTask;
     }
+
+}
+
+/// <summary>Exit a program by running a custom function, as an inline alternative to subclassing <see cref="ExitStrategy"/>.</summary>
+/// <param name="exit"></param>
+public class DelegateExit(Func<Task> exit): ExitStrategy {
+
+    /// <inheritdoc />
+    public virtual Task StopCurrentProcess() => exit();
 
 }

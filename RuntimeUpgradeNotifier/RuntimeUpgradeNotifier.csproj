@@ -3,7 +3,7 @@
     <PropertyGroup>
         <TargetFrameworks>net8.0-windows;net8.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
-        <Version>1.2.0-beta.1</Version>
+        <Version>1.2.0-beta.2</Version>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
         <RootNamespace>RuntimeUpgrade.Notifier</RootNamespace>
