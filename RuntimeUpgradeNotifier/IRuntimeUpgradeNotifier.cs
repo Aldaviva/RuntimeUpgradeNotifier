@@ -46,7 +46,7 @@ public interface IRuntimeUpgradeNotifier: IDisposable {
     /// <summary>
     /// <para>Minimum duration that defines how long Windows Installer (MSI) installations must not be running continuously after a runtime upgrade before triggering a notification or restarting the program.</para>
     /// <para>This attempts to solve the problem where some .NET runtimes get upgraded non-atomically. For example, Visual Studio Installer removes the old runtime, waits, and then installs the new runtime, leaving a window of time in between when no suitable runtime is installed and restarting the dependent program would lead to a crash with a "You must install .NET" error.</para>
-    /// <para>The default duration is 2 minutes. Only used on Windows, and ignored on Linux.</para>
+    /// <para>The default duration is 6 minutes. Only used on Windows, and ignored on Linux.</para>
     /// </summary>
     /// <exception accessor="set" cref="ArgumentOutOfRangeException">duration is negative</exception>
     TimeSpan WindowsInstallerFinishedDebounceDuration { get; set; }

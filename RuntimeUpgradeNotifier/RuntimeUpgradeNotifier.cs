@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Win32;
 using RuntimeUpgrade.Notifier.Data;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -33,10 +34,14 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
     private string?                         _watchedRuntimeDirectory;
     private string?                         _serviceName;
     private ILogger<RuntimeUpgradeNotifier> _logger = NullLogger<RuntimeUpgradeNotifier>.Instance;
+    private bool?                           _warnAboutServerHostingBundle;
 
     /// <inheritdoc />
     public ILoggerFactory LoggerFactory {
-        set => _logger = value.CreateLogger<RuntimeUpgradeNotifier>();
+        set {
+            _logger = value.CreateLogger<RuntimeUpgradeNotifier>();
+            WarnAboutServerHostingBundleIfNecessary();
+        }
     }
 
     static RuntimeUpgradeNotifier() {
@@ -105,6 +110,8 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
                         field = RestartStrategy.AutoRestartProcess;
                     }
                 }
+
+                WarnAboutServerHostingBundleIfNecessary();
             }
         }
     } = RestartStrategy.Manual;
@@ -119,7 +126,7 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
             if (value < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(value), value, "duration must be non-negative");
             field = value;
         }
-    } = TimeSpan.FromMinutes(2);
+    } = TimeSpan.FromMinutes(6);
 
     /// <inheritdoc />
     public event AsyncEventHandler<RuntimeUpgradeEventArgs> RuntimeUpgraded {
@@ -329,6 +336,43 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
         return null;
 
         void OnForkException(Exception? e) => _logger.LogError(e, "Failed to restart current process");
+    }
+
+    private void WarnAboutServerHostingBundleIfNecessary() {
+        _warnAboutServerHostingBundle ??= IsWindows && !IsRunningInIIS() && IsAspNetCoreApp() && !IsServerHostingBundleInstalled();
+
+        if (_logger is not NullLogger<RuntimeUpgradeNotifier> && _warnAboutServerHostingBundle is true) {
+            _warnAboutServerHostingBundle = false;
+            _logger.LogWarning(
+                "This framework-dependent ASP.NET Core app is running without IIS, but the Hosting Bundle is not installed. This can lead to the app being killed and not restarted while upgrading the .NET runtimes to newer versions. To avoid this problem, you can install the Hosting Bundle from https://dotnet.microsoft.com/download.");
+        }
+
+        static bool IsAspNetCoreApp() => (AppDomain.CurrentDomain.GetData("APP_CONTEXT_DEPS_FILES") as string)?
+            .Split(';', StringSplitOptions.RemoveEmptyEntries)
+            .Skip(1)
+            .Any(static filePath => "Microsoft.AspNetCore.App.deps.json".Equals(Path.GetFileName(filePath), StringComparison.OrdinalIgnoreCase)) ?? false;
+
+        static bool IsRunningInIIS() => Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\inetsrv\w3wp.exe").Equals(Environment.ProcessPath, StringComparison.OrdinalIgnoreCase);
+
+        static bool IsServerHostingBundleInstalled() {
+            string expectedDisplayNamePrefix = $"Microsoft .NET {Environment.Version.Major}.{Environment.Version.Minor}.";
+            return ((IEnumerable<string>) [
+                    @"SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
+                ])
+                .SelectMany(GetDisplayName)
+                .Any(displayName => displayName is not null
+                    && displayName.StartsWith(expectedDisplayNamePrefix, StringComparison.Ordinal)
+                    && displayName.EndsWith(" - Windows Server Hosting", StringComparison.Ordinal));
+
+            static IEnumerable<string?> GetDisplayName(string uninstallKeyPath) {
+                using RegistryKey? uninstallKey = Registry.LocalMachine.OpenSubKey(uninstallKeyPath, false);
+                foreach (string uninstallSubKeyName in uninstallKey?.GetSubKeyNames() ?? []) {
+                    using RegistryKey? uninstallSubKey = uninstallKey?.OpenSubKey(uninstallSubKeyName, false);
+                    yield return uninstallSubKey?.GetValue("DisplayName", null) as string;
+                }
+            }
+        }
     }
 
 }
