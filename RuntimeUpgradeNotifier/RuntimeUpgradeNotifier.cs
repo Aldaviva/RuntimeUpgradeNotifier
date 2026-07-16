@@ -235,14 +235,14 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
                     _                                   => "unsupported restart strategy"
                 });
 
-                IEnumerable<AsyncEventHandler>                          beforeRuntimeUpdadedCallbacks;
-                IEnumerable<AsyncEventHandler<RuntimeUpgradeEventArgs>> runtimeUpdadedCallbacks;
+                IEnumerable<AsyncEventHandler>                          beforeRuntimeUpgradedCallbacks;
+                IEnumerable<AsyncEventHandler<RuntimeUpgradeEventArgs>> runtimeUpgradedCallbacks;
                 lock (_eventLock) {
-                    beforeRuntimeUpdadedCallbacks = _beforeRuntimeUpgradedCallbacks.ToList();
-                    runtimeUpdadedCallbacks       = _runtimeUpgradedCallbacks.ToList();
+                    beforeRuntimeUpgradedCallbacks = _beforeRuntimeUpgradedCallbacks.ToList();
+                    runtimeUpgradedCallbacks       = _runtimeUpgradedCallbacks.ToList();
                 }
 
-                await Task.WhenAll(beforeRuntimeUpdadedCallbacks.Select(handler => handler(this))).ConfigureAwait(false);
+                await Task.WhenAll(beforeRuntimeUpgradedCallbacks.Select(handler => handler(this))).ConfigureAwait(false);
 
                 RuntimeUpgradeEventArgs eventArgs = new();
                 if (RestartStrategy is RestartStrategy.AutoRestartProcess or RestartStrategy.AutoStartNewProcess) {
@@ -250,7 +250,7 @@ public sealed class RuntimeUpgradeNotifier: IRuntimeUpgradeNotifier {
                     eventArgs.NewProcessId = StartNewProcessForCurrentProgram();
                 }
 
-                await Task.WhenAll(runtimeUpdadedCallbacks.Select(handler => handler(this, eventArgs))).ConfigureAwait(false);
+                await Task.WhenAll(runtimeUpgradedCallbacks.Select(handler => handler(this, eventArgs))).ConfigureAwait(false);
 
                 switch (RestartStrategy) {
                     case RestartStrategy.AutoRestartProcess:
