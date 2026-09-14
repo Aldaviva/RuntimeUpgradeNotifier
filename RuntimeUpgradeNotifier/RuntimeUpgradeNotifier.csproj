@@ -1,9 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFrameworks>net8.0-windows;net8.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
-        <Version>1.2.0-beta.3</Version>
+        <Version>1.2.0</Version>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
         <RootNamespace>RuntimeUpgrade.Notifier</RootNamespace>
@@ -25,21 +25,22 @@
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <PackageReadmeFile>Readme.md</PackageReadmeFile>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <WarningsAsErrors>CA1859</WarningsAsErrors>
+        <WarningsAsErrors>$(WarningsAsErrors);CA1859</WarningsAsErrors>
     </PropertyGroup>
 
     <ItemGroup>
         <None Include="icon.png;..\Readme.md" Pack="true" PackagePath="\" />
         <None Include="..\.github*\**" />
         <None Include="*.csproj.DotSettings;*.sln.DotSettings" Visible="false" />
+        <AdditionalFiles Include="ExceptionAdjustments.txt" />
     </ItemGroup>
 
     <ItemGroup>
         <!-- Intransitive dependency: compile this library against types in Microsoft.Extensions.Hosting.Abstractions, but don't make consumers of this library also depend on Microsoft.Extensions.Hosting.Abstractions -->
         <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" PrivateAssets="All" />
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.301" PrivateAssets="All" />
-        <PackageReference Include="System.Management" Version="10.0.10" />
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.401" PrivateAssets="All" />
+        <PackageReference Include="System.Management" Version="10.0.12" />
     </ItemGroup>
 
     <PropertyGroup Condition="$(TargetFramework.EndsWith('-windows'))">

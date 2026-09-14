@@ -96,9 +96,10 @@ public class CancellationTokenExit(CancellationTokenSource cancellationTokenSour
 public class SemaphoreExit(SemaphoreSlim semaphore): ExitStrategy {
 
     /// <inheritdoc />
-    /// <exception cref="SemaphoreFullException"></exception>
     public virtual Task StopCurrentProcess() {
-        semaphore.Release();
+        try {
+            semaphore.Release();
+        } catch (SemaphoreFullException) {}
         return Task.CompletedTask;
     }
 
@@ -109,16 +110,16 @@ public class SemaphoreExit(SemaphoreSlim semaphore): ExitStrategy {
 /// </summary>
 public class TaskExit: ExitStrategy {
 
-    private readonly TaskCompletionSource _tcs = new();
+    private readonly TaskCompletionSource tcs = new();
 
     /// <summary>
     /// Will be completed when the runtime is upgraded and this program is ready to exit. You can await this in <c>Main</c>, or use <see cref="Task.WhenAny(System.Threading.Tasks.Task[])"/> to allow your program to also exit in other ways.
     /// </summary>
-    public Task StopRequested => _tcs.Task;
+    public Task StopRequested => tcs.Task;
 
     /// <inheritdoc />
     public virtual Task StopCurrentProcess() {
-        _tcs.TrySetResult();
+        tcs.TrySetResult();
         return Task.CompletedTask;
     }
 

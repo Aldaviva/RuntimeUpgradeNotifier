@@ -14,10 +14,9 @@ using IRuntimeUpgradeNotifier runtimeUpgradeNotifier = new RuntimeUpgradeNotifie
 runtimeUpgradeNotifier.RestartStrategy = RestartStrategy.AutoRestartProcess;
 TaskExit exitStrategy = new();
 runtimeUpgradeNotifier.ExitStrategy = exitStrategy;
-runtimeUpgradeNotifier.RuntimeUpgraded += (_, evt) => {
+runtimeUpgradeNotifier.RuntimeUpgraded += async (_, evt) => {
     MessageBox.Show($"Runtime upgraded, restarted this program with PID {evt.NewProcessId ?? null} and exiting this process",
         "RuntimeUpgradeNotifier Demo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    return Task.CompletedTask;
 };
 
 await exitStrategy.StopRequested;

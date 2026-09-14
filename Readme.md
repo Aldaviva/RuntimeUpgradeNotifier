@@ -31,16 +31,14 @@
 
 ## Requirements
 - .NET Runtime 8 or later
-- Linux or Windows
+- Linux (with systemd) or Windows
 
 ## Installation
-
 ```sh
 dotnet package add RuntimeUpgradeNotifier
 ```
 
 ## Usage
-
 > [!WARNING]
 > If you are running a Windows webapp service that depends on ASP.NET Core and uses Kestrel or `http.sys` (without IIS), then you counterintuitively _**must**_ install the .NET [Hosting Bundle](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle) instead of separately installing the ASP.NET Core and .NET Runtimes, even though you're not hosting the webapp in IIS. This is required for your service to cleanly and automatically restart during .NET runtime update installations.
 > 
@@ -54,7 +52,10 @@ Construct a new instance of `RuntimeUpgradeNotifier`.
 ```cs
 using RuntimeUpgrade.Notifier;
 
-using IRuntimeUpgradeNotifier runtimeUpgradeNotifier = new RuntimeUpgradeNotifier();
+using IRuntimeUpgradeNotifier runtimeUpgradeNotifier = new RuntimeUpgradeNotifier() {
+    RestartStrategy = // choose a Restart Strategy below
+    ExitStrategy    = // choose an Exit Stategy below
+};
 ```
 
 ### Restart Strategy: what to do when the runtime is upgraded
@@ -76,7 +77,7 @@ This starts a duplicate copy of the current process, with the same arguments, wo
 
 ```cs
 runtimeUpgradeNotifier.RestartStrategy = RestartStrategy.AutoStartNewProcess;
-runtimeUpgradeNotifier.RuntimeUpgraded += (_, evt) => {
+runtimeUpgradeNotifier.RuntimeUpgraded += async (_, evt) => {
     // tear down current process
 };
 ```
@@ -112,7 +113,7 @@ runtimeUpgradeNotifier.RestartStrategy = RestartStrategy.AutoRestartService;
 If the process is not running as a service, this library will fall back to the [`AutoRestartProcess`](#automatically-restart-process) strategy, so you may want to set the desired [Exit Strategy](#exit-strategy-how-to-stop-the-current-process) to handle both cases.
 
 > [!NOTE]  
-> In practice, the official .NET installers on Windows (including through Windows Update) already automatically restart .NET processes without using this library, so this is only really needed on Linux. Cross-platform services can set this to `AutoRestartService` to avoid special cases, and Windows-only services don't need to use this library at all.
+> In practice, the official .NET installers on Windows (including through Windows Update) already automatically attempt to restart .NET services without using this library. Cross-platform services can set this to `AutoRestartService` to avoid special cases, and Windows-only services may not need to use this library at all.
 
 > [!WARNING]
 > When running Windows services that use ASP.NET Core, make sure to install the [.NET Hosting Bundle](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle) to [avoid crashed, stopped services after a .NET update](#usage).
@@ -182,10 +183,8 @@ runtimeUpgradeNotifier.ExitStrategy = new WpfApplicationExit(1);
 You can also define your own technique to exit the process by passing a function to `DelegateExit` or implementing the `ExitStrategy` interface. Here are examples that uncleanly kills the current process.
 
 ```cs
-runtimeUpgradeNotifier.ExitStrategy = new DelegateExit(() => {
-    Process.GetCurrentProcess().Kill();
-    return Task.CompletedTask;
-});
+runtimeUpgradeNotifier.ExitStrategy = new DelegateExit(async () =>
+    Process.GetCurrentProcess().Kill());
 ```
 
 ```cs
@@ -193,9 +192,8 @@ runtimeUpgradeNotifier.ExitStrategy = new KillExit();
 
 public class KillExit: ExitStrategy {
 
-    public Task StopCurrentProcess() {
+    public async Task StopCurrentProcess() {
         Process.GetCurrentProcess().Kill();
-        return Task.CompletedTask;
     }
 
 }
