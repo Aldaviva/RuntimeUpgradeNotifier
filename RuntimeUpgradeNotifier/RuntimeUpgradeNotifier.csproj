@@ -40,7 +40,7 @@
         <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" PrivateAssets="All" />
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
         <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.401" PrivateAssets="All" />
-        <PackageReference Include="System.Management" Version="10.0.12" />
+        <PackageReference Include="System.Management" Version="11.0.0" />
     </ItemGroup>
 
     <PropertyGroup Condition="$(TargetFramework.EndsWith('-windows'))">
